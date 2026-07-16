@@ -15,6 +15,9 @@
   .filters button{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px;cursor:pointer}
   .filters button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
   .filters.st button.on{background:#16a34a;border-color:#16a34a}
+  .filters.dt button.on{background:#7c3aed;border-color:#7c3aed}
+  .filters.dt .dtin{font-size:12px;padding:4px 9px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--txt);cursor:pointer}
+  .filters.dt .dtin.on{background:#7c3aed;border-color:#7c3aed;color:#fff;font-weight:700}
   .wrap{padding:12px 16px 60px;max-width:760px;margin:0 auto}
   .sec{margin:18px 0 6px;font-size:13px;color:var(--sub);letter-spacing:.04em;font-weight:700}
   .card{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;box-shadow:0 1px 3px rgba(16,24,40,.06)}
@@ -52,6 +55,7 @@
   <div class="sub">会社員ターゲット／対面・ハイブリッド｜◎◎最優先 ◎おすすめ ○良い</div>
   <div class="filters" id="filters"></div>
   <div class="filters st" id="stfilters"></div>
+  <div class="filters dt" id="dtfilters"></div>
 </header>
 <div class="wrap">
   <div class="sec" id="datedHead">📅 日付が決まっているもの（早い順）</div>
@@ -1646,14 +1650,45 @@ function stClass(k){const s=status[k];return s==='go'?'st-go':s==='maybe'?'st-ma
 let activeCat='すべて',activeSt='すべて';
 const STF={'すべて':'','行く':'go','検討':'maybe','済':'done','未設定':'none'};
 function pass(k){if(activeSt==='すべて')return true;const v=STF[activeSt];if(v==='none')return !status[k];return status[k]===v;}
+/* ===== 日付フィルタ ===== */
+let dateMode='すべて',activeDate='';
+const DMODES=['すべて','今日','明日','今週末','今後7日'];
+function ymd(dt){return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');}
+function onDay(e,day){return e.d<=day&&(e.endd||e.d)>=day;}
+function inRange(e,from,to){return e.d<=to&&(e.endd||e.d)>=from;}
+function datePass(e){
+  if(dateMode==='すべて')return true;
+  var t=new Date();t.setHours(0,0,0,0);
+  if(dateMode==='今日')return onDay(e,ymd(t));
+  if(dateMode==='明日'){var d=new Date(t);d.setDate(d.getDate()+1);return onDay(e,ymd(d));}
+  if(dateMode==='今週末'){
+    var dow=t.getDay();
+    if(dow===0)return onDay(e,ymd(t));                       /* 今日が日曜なら今日のみ */
+    var sat=new Date(t);sat.setDate(sat.getDate()+((6-dow)+7)%7); /* 直近の土曜(今日が土なら今日) */
+    var sun=new Date(sat);sun.setDate(sun.getDate()+1);
+    return inRange(e,ymd(sat),ymd(sun));
+  }
+  if(dateMode==='今後7日'){var e7=new Date(t);e7.setDate(e7.getDate()+6);return inRange(e,ymd(t),ymd(e7));}
+  if(dateMode==='日付指定'&&activeDate)return onDay(e,activeDate);
+  return true;
+}
 function render(){
   const fc=document.getElementById('filters');fc.innerHTML='';
   ['すべて'].concat(CATS).forEach(function(c){var b=document.createElement('button');b.textContent=c;if(c===activeCat)b.className='on';b.onclick=function(){activeCat=c;render();};fc.appendChild(b);});
   const sf=document.getElementById('stfilters');sf.innerHTML='';
   Object.keys(STF).forEach(function(c){var b=document.createElement('button');b.textContent=c;if(c===activeSt)b.className='on';b.onclick=function(){activeSt=c;render();};sf.appendChild(b);});
   var ft=document.createElement('button');ft.textContent=(hideFounder?'☑ ':'☐ ')+'⚠️起業寄りを隠す';if(hideFounder)ft.className='on';ft.onclick=function(){hideFounder=!hideFounder;render();};sf.appendChild(ft);
+  /* ===== 日付フィルタUI ===== */
+  const df=document.getElementById('dtfilters');df.innerHTML='';
+  DMODES.forEach(function(m){var b=document.createElement('button');b.textContent=m;if(dateMode===m)b.className='on';b.onclick=function(){dateMode=m;activeDate='';render();};df.appendChild(b);});
+  var inp=document.createElement('input');inp.type='date';inp.value=activeDate;inp.className='dtin';if(dateMode==='日付指定')inp.classList.add('on');
+  inp.onchange=function(){activeDate=this.value;dateMode=this.value?'日付指定':'すべて';render();};
+  df.appendChild(inp);
+  if(dateMode==='日付指定'&&activeDate){var cl=document.createElement('button');cl.textContent='×  解除';cl.onclick=function(){activeDate='';dateMode='すべて';render();};df.appendChild(cl);}
   const list=document.getElementById('list');list.innerHTML='';
-  dated.slice().sort(function(a,b){return a.d>b.d?1:a.d<b.d?-1:0;}).filter(function(e){var _t=new Date();_t.setHours(0,0,0,0);return (activeCat==='すべて'||e.c===activeCat)&&pass(e.n)&&(!hideFounder||!isFounder(e))&&new Date((e.endd||e.d)+'T23:59:59')>=_t;}).forEach(function(e){
+  var _shown=0;
+  dated.slice().sort(function(a,b){return a.d>b.d?1:a.d<b.d?-1:0;}).filter(function(e){var _t=new Date();_t.setHours(0,0,0,0);return (activeCat==='すべて'||e.c===activeCat)&&pass(e.n)&&(!hideFounder||!isFounder(e))&&datePass(e)&&new Date((e.endd||e.d)+'T23:59:59')>=_t;}).forEach(function(e){
+    _shown++;
     var lvtxt=e.l===3?'◎◎':e.l===2?'◎':'○';var nm=splitName(e);
     var card=document.createElement('div');card.className='card l'+e.l+' '+stClass(e.n);if(isFounder(e))card.style.opacity='0.68';
     card.innerHTML='<div class="date">'+dlabel(e)+'<small>'+(e.t||'終日')+'</small></div>'+
@@ -1665,6 +1700,14 @@ function render(){
       stBtns(e.n);
     list.appendChild(card);
   });
+  /* 見出しに絞り込み結果の件数を表示 */
+  var _dh=document.getElementById('datedHead');
+  if(_dh){
+    var _lbl=(dateMode==='すべて')?'📅 日付が決まっているもの（早い順）'
+      :(dateMode==='日付指定'?'📅 '+activeDate+' に参加できるもの':'📅 '+dateMode+'に参加できるもの');
+    _dh.innerHTML=_lbl+' <span style="font-weight:400;color:var(--sub);font-size:12px">— '+_shown+'件</span>'+
+      (_shown===0?'<div style="font-weight:400;color:var(--sub);font-size:12px;margin-top:6px">条件に合うイベントがありません。日付や絞り込みを変えてみてください。</div>':'');
+  }
   const rc=document.getElementById('recurring');rc.innerHTML='';
   recurring.filter(function(e){return (activeCat==='すべて'||e.c===activeCat)&&pass(e.n)&&(!hideFounder||!isFounder(e));}).forEach(function(e){
     var lvtxt=e.l===3?'◎◎':e.l===2?'◎':'○';var nm=splitName(e);
