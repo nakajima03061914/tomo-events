@@ -46,16 +46,64 @@
   .status button.on-maybe{background:#d97706;color:#fff;border-color:#d97706}
   .status button.on-done{background:#98a2b3;color:#fff;border-color:#98a2b3}
   .note{color:var(--sub);font-size:12px;margin-top:14px;padding:12px;border:1px dashed var(--line);border-radius:10px;background:#fff}
-  @media(max-width:560px){.btns{flex:1 1 100%}.btns a{flex:1;text-align:center}}
+  /* ===== 検索まわり（2026/8/6 追加） ===== */
+  .searchbar{display:flex;gap:6px;align-items:center;margin-bottom:8px}
+  .searchbar input[type=search]{flex:1;font-size:15px;padding:10px 12px;border:2px solid var(--line);border-radius:10px;background:#fff;color:var(--txt);-webkit-appearance:none}
+  .searchbar input[type=search]:focus{outline:none;border-color:var(--accent)}
+  .searchbar .clr{background:#eef1f6;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;cursor:pointer;white-space:nowrap;color:#374151}
+  .frow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;align-items:center}
+  .frow .lb{font-size:11px;color:var(--sub);font-weight:700;margin-right:2px;flex:0 0 auto}
+  .frow button{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px;cursor:pointer}
+  .frow.ar button.on{background:#0891b2;border-color:#0891b2;color:#fff;font-weight:700}
+  .frow.fe button.on{background:#db2777;border-color:#db2777;color:#fff;font-weight:700}
+  .frow.ft button.on{background:#ea580c;border-color:#ea580c;color:#fff;font-weight:700}
+  .frow.so button.on{background:#475569;border-color:#475569;color:#fff;font-weight:700}
+  /* スクロールしたらタイトル行を畳んで、検索と絞り込みだけ残す */
+  header.mini h1,header.mini .sub{display:none}
+  header.mini{padding-top:8px}
+  .hitbar{font-size:12px;color:var(--sub);margin:2px 0 6px;font-weight:600}
+  .hitbar b{color:var(--accent);font-size:14px}
+  mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}
+  .detail{max-height:3.1em;overflow:hidden;position:relative;cursor:pointer}
+  .card.open .detail{max-height:none}
+  .more{font-size:11px;color:var(--accent);font-weight:700;cursor:pointer;margin-top:2px}
+  details.adv{margin-bottom:6px}
+  details.adv summary{font-size:12px;color:var(--sub);cursor:pointer;font-weight:700;padding:2px 0;list-style:none}
+  details.adv summary::-webkit-details-marker{display:none}
+  details.adv summary:before{content:'▸ ';}
+  details.adv[open] summary:before{content:'▾ ';}
+  /* 狭い画面ではチップを1行の横スクロールにして、ヘッダーが画面を占有しないようにする */
+  @media(max-width:720px){
+    .frow{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px}
+    .frow::-webkit-scrollbar{display:none}
+    .frow button,.frow .lb,.frow input{flex:0 0 auto}
+  }
+  @media(max-width:560px){.btns{flex:1 1 100%}.btns a{flex:1;text-align:center}
+    header{padding:10px 12px 6px}.searchbar input[type=search]{font-size:16px;padding:9px 11px}
+    h1{font-size:16px;margin-bottom:2px}.sub{font-size:11px;margin-bottom:6px}
+    .frow{gap:5px;margin-bottom:5px}.frow button{padding:5px 9px}
+    .hitbar{margin:0 0 4px}}
 </style>
 </head>
 <body>
 <header>
   <h1>🎯 志ある会社員と出会う場</h1>
   <div class="sub">会社員ターゲット／対面・ハイブリッド｜◎◎最優先 ◎おすすめ ○良い</div>
-  <div class="filters" id="filters"></div>
-  <div class="filters st" id="stfilters"></div>
-  <div class="filters dt" id="dtfilters"></div>
+  <div class="searchbar">
+    <input type="search" id="q" placeholder="🔍 キーワードで検索（例: ラン / 立ち飲み / 五反田 / 一人参加 / 無料）" autocomplete="off">
+    <button class="clr" id="clrAll">条件クリア</button>
+  </div>
+  <div class="frow dt" id="dtfilters"></div>
+  <div class="frow ar" id="arfilters"></div>
+  <div class="frow ft" id="ftfilters"></div>
+  <details class="adv" id="adv">
+    <summary>もっと絞り込む（ジャンル・料金・並び順・チェック状態）</summary>
+    <div class="frow" id="filters"></div>
+    <div class="frow fe" id="fefilters"></div>
+    <div class="frow so" id="sofilters"></div>
+    <div class="frow st" id="stfilters"></div>
+  </details>
+  <div class="hitbar" id="hitbar"></div>
 </header>
 <div class="wrap">
   <div class="sec" id="datedHead">📅 日付が決まっているもの（早い順）</div>
@@ -1302,6 +1350,53 @@ const CATS=(function(){
   return known.concat(rest);
 })();
 let activeCat='すべて',activeSt='すべて';
+/* ===== 検索・エリア・料金・特徴フィルタ（2026/8/6 追加） ===== */
+let qText='',activeArea='すべて',activeFee='すべて',activeFeat='すべて',sortMode='日付順';
+/* 中島さんの行動圏を先頭に。品川〜大井町〜浜松町〜田町〜五反田〜新橋 */
+const AREAS=[['すべて',null],
+ ['⭐行動圏',/品川|大井町|五反田|浜松町|田町|新橋|大崎|芝浦|竹芝|三田|高輪/],
+ ['渋谷',/渋谷|恵比寿|代官山|中目黒/],['新宿',/新宿|代々木|四谷|高田馬場/],
+ ['池袋',/池袋|巣鴨|大塚/],['東京/丸の内',/東京駅|丸の内|大手町|日本橋|八重洲|神田|有楽町|銀座|京橋/],
+ ['上野/浅草',/上野|浅草|秋葉原|御徒町|北千住|日暮里|湯島/],
+ ['六本木/赤坂',/六本木|赤坂|virtual|麻布|虎ノ門|溜池/],
+ ['横浜/神奈川',/横浜|川崎|みなとみらい|関内|武蔵小杉|鎌倉|藤沢|湘南/],
+ ['その他23区',/中野|杉並|世田谷|練馬|板橋|足立|葛飾|江戸川|墨田|江東|豊洲|大田|目黒|文京/]];
+const FEATS=[['すべて',null],['🔰1人参加OK',/1人参加|一人参加|おひとり|お一人|ひとり参加|初参加/],
+ ['🌱初心者歓迎',/初心者|未経験|初めて|はじめて|ビギナー/],['🍻懇親あり',/懇親|交流会|交流タイム|打ち上げ|乾杯|飲み/],
+ ['👥20-30代',/20代|30代|U29|U30|若手|同世代|20〜30|20・30/]];
+const FEES=[['すべて',null],['無料',0],['〜2,000円',2000],['〜5,000円',5000]];
+function norm(s){return (s||'').toLowerCase();}
+function feeMin(f){ /* 「男性5,000円／女性4,000円」等から最小額を拾う。無料は0 */
+  var s=f||''; if(/無料|free|0円/i.test(s)&&!/[1-9][\d,]*\s*円/.test(s))return 0;
+  var ms=s.match(/[\d,]+/g); if(!ms)return null;
+  var ns=ms.map(function(x){return parseInt(x.replace(/,/g,''),10);}).filter(function(n){return n>=100;});
+  return ns.length?Math.min.apply(null,ns):0;
+}
+function searchPass(e){
+  if(!qText)return true;
+  var hay=norm((e.n||'')+' '+(e.a||'')+' '+(e.f||'')+' '+(e.c||'')+' '+(e.t||''));
+  return qText.split(/\s+/).filter(Boolean).every(function(w){return hay.indexOf(w)>=0;});
+}
+function areaPass(e){ if(activeArea==='すべて')return true;
+  var a=AREAS.find(function(x){return x[0]===activeArea;}); if(!a||!a[1])return true;
+  return a[1].test((e.a||'')+' '+(e.n||''));}
+function featPass(e){ if(activeFeat==='すべて')return true;
+  var f=FEATS.find(function(x){return x[0]===activeFeat;}); if(!f||!f[1])return true;
+  return f[1].test(e.n||'');}
+function feePass(e){ if(activeFee==='すべて')return true;
+  var lim=FEES.find(function(x){return x[0]===activeFee;}); if(!lim)return true;
+  var m=feeMin(e.f); if(m===null)return false;
+  return lim[1]===0? m===0 : m<=lim[1];}
+function hl(s){ /* 検索語をハイライト */
+  if(!qText||!s)return s;
+  var out=s;
+  qText.split(/\s+/).filter(Boolean).forEach(function(w){
+    try{out=out.replace(new RegExp('('+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark>$1</mark>');}catch(_){}
+  });
+  return out;
+}
+function allPass(e){return searchPass(e)&&areaPass(e)&&featPass(e)&&feePass(e);}
+function clearAll(){qText='';activeArea='すべて';activeFee='すべて';activeFeat='すべて';activeCat='すべて';activeSt='すべて';dateMode='すべて';activeDate='';sortMode='日付順';var qi=document.getElementById('q');if(qi)qi.value='';render();}
 const STF={'すべて':'','行く':'go','検討':'maybe','済':'done','未設定':'none'};
 function pass(k){if(activeSt==='すべて')return true;const v=STF[activeSt];if(v==='none')return !status[k];return status[k]===v;}
 /* ===== 日付フィルタ ===== */
@@ -1326,8 +1421,20 @@ function datePass(e){
   if(dateMode==='日付指定'&&activeDate)return onDay(e,activeDate);
   return true;
 }
+function chips(elId,items,cur,onpick,label){
+  var c=document.getElementById(elId);if(!c)return;c.innerHTML='';
+  if(label){var l=document.createElement('span');l.className='lb';l.textContent=label;c.appendChild(l);}
+  items.forEach(function(name){var b=document.createElement('button');b.textContent=name;
+    if(name===cur)b.className='on';b.onclick=function(){onpick(name);};c.appendChild(b);});
+}
 function render(){
+  /* エリア・特徴・料金・並び順（2026/8/6 追加） */
+  chips('arfilters',AREAS.map(function(a){return a[0];}),activeArea,function(v){activeArea=v;render();},'エリア');
+  chips('ftfilters',FEATS.map(function(a){return a[0];}),activeFeat,function(v){activeFeat=v;render();},'特徴');
+  chips('fefilters',FEES.map(function(a){return a[0];}),activeFee,function(v){activeFee=v;render();},'料金');
+  chips('sofilters',['日付順','おすすめ順'],sortMode,function(v){sortMode=v;render();},'並び順');
   const fc=document.getElementById('filters');fc.innerHTML='';
+  var _cl=document.createElement('span');_cl.className='lb';_cl.textContent='ジャンル';fc.appendChild(_cl);
   ['すべて'].concat(CATS).forEach(function(c){var b=document.createElement('button');b.textContent=c;if(c===activeCat)b.className='on';b.onclick=function(){activeCat=c;render();};fc.appendChild(b);});
   const sf=document.getElementById('stfilters');sf.innerHTML='';
   Object.keys(STF).forEach(function(c){var b=document.createElement('button');b.textContent=c;if(c===activeSt)b.className='on';b.onclick=function(){activeSt=c;render();};sf.appendChild(b);});
@@ -1341,15 +1448,18 @@ function render(){
   if(dateMode==='日付指定'&&activeDate){var cl=document.createElement('button');cl.textContent='×  解除';cl.onclick=function(){activeDate='';dateMode='すべて';render();};df.appendChild(cl);}
   const list=document.getElementById('list');list.innerHTML='';
   var _shown=0;
-  dated.slice().sort(function(a,b){return a.d>b.d?1:a.d<b.d?-1:0;}).filter(function(e){var _t=new Date();_t.setHours(0,0,0,0);return (activeCat==='すべて'||e.c===activeCat)&&pass(e.n)&&(!hideFounder||!isFounder(e))&&datePass(e)&&new Date((e.endd||e.d)+'T23:59:59')>=_t;}).forEach(function(e){
+  dated.slice().sort(function(a,b){
+    if(sortMode==='おすすめ順'){var dl=(b.l||0)-(a.l||0);if(dl)return dl;}
+    return a.d>b.d?1:a.d<b.d?-1:0;
+  }).filter(function(e){var _t=new Date();_t.setHours(0,0,0,0);return (activeCat==='すべて'||e.c===activeCat)&&pass(e.n)&&(!hideFounder||!isFounder(e))&&datePass(e)&&allPass(e)&&new Date((e.endd||e.d)+'T23:59:59')>=_t;}).forEach(function(e){
     _shown++;
     var lvtxt=e.l===3?'◎◎':e.l===2?'◎':'○';var nm=splitName(e);
     var card=document.createElement('div');card.className='card l'+e.l+' '+stClass(e.n);if(isFounder(e))card.style.opacity='0.68';
     card.innerHTML='<div class="date">'+dlabel(e)+'<small>'+(e.t||'終日')+'</small></div>'+
       '<div class="main"><div>'+gbadge(e)+'<span class="lv lv'+e.l+'">'+lvtxt+'</span></div>'+
-      '<div class="title">'+nm[0]+fwb(e)+'</div>'+
-      (nm[1]?'<div class="detail">'+nm[1]+'</div>':'')+
-      '<div class="meta2">📍'+e.a+'　💴'+e.f+'</div></div>'+
+      '<div class="title">'+hl(nm[0])+fwb(e)+'</div>'+
+      (nm[1]?'<div class="detail" onclick="this.parentNode.parentNode.classList.toggle(\'open\')">'+hl(nm[1])+'</div><div class="more" onclick="this.parentNode.parentNode.classList.toggle(\'open\')">▼ 詳細を開く/閉じる</div>':'')+
+      '<div class="meta2">📍'+hl(e.a)+'　💴'+hl(e.f)+'</div></div>'+
       '<div class="btns"><a class="apply" href="'+e.u+'" target="_blank">申込</a><a class="cal" href="'+gcal(e)+'" target="_blank">📅追加</a></div>'+
       stBtns(e.n);
     list.appendChild(card);
@@ -1363,19 +1473,60 @@ function render(){
       (_shown===0?'<div style="font-weight:400;color:var(--sub);font-size:12px;margin-top:6px">条件に合うイベントがありません。日付や絞り込みを変えてみてください。</div>':'');
   }
   const rc=document.getElementById('recurring');rc.innerHTML='';
-  recurring.filter(function(e){return (activeCat==='すべて'||e.c===activeCat)&&pass(e.n)&&(!hideFounder||!isFounder(e));}).forEach(function(e){
+  var _rshown=0;
+  recurring.filter(function(e){return (activeCat==='すべて'||e.c===activeCat)&&pass(e.n)&&(!hideFounder||!isFounder(e))&&allPass(e);}).forEach(function(e){
+    _rshown++;
     var lvtxt=e.l===3?'◎◎':e.l===2?'◎':'○';var nm=splitName(e);
     var card=document.createElement('div');card.className='card l'+e.l+' '+stClass(e.n);if(isFounder(e))card.style.opacity='0.68';
     card.innerHTML='<div class="main"><div>'+gbadge(e)+'<span class="lv lv'+e.l+'">'+lvtxt+'</span></div>'+
-      '<div class="title">'+nm[0]+fwb(e)+'</div>'+
-      (nm[1]?'<div class="detail">'+nm[1]+'</div>':'')+
-      '<div class="meta2">📍'+e.a+'　💴'+e.f+'</div></div>'+
+      '<div class="title">'+hl(nm[0])+fwb(e)+'</div>'+
+      (nm[1]?'<div class="detail" onclick="this.parentNode.parentNode.classList.toggle(\'open\')">'+hl(nm[1])+'</div><div class="more" onclick="this.parentNode.parentNode.classList.toggle(\'open\')">▼ 詳細を開く/閉じる</div>':'')+
+      '<div class="meta2">📍'+hl(e.a)+'　💴'+hl(e.f)+'</div></div>'+
       '<div class="btns"><a class="apply" href="'+e.u+'" target="_blank">詳細/参加</a></div>'+stBtns(e.n);
     rc.appendChild(card);
   });
+  /* 件数バー＋有効な絞り込みの表示 */
+  var hb=document.getElementById('hitbar');
+  if(hb){
+    var act=[];
+    if(qText)act.push('🔍「'+qText+'」');
+    if(activeArea!=='すべて')act.push(activeArea);
+    if(activeFeat!=='すべて')act.push(activeFeat);
+    if(activeFee!=='すべて')act.push(activeFee);
+    if(activeCat!=='すべて')act.push(activeCat);
+    if(dateMode!=='すべて')act.push(dateMode==='日付指定'?activeDate:dateMode);
+    if(activeSt!=='すべて')act.push(activeSt);
+    hb.innerHTML='該当 <b>'+_shown+'</b> 件（日付あり）＋ <b>'+_rshown+'</b> 件（定期）'+
+      (act.length?'　｜　絞り込み中: '+act.join(' / '):'　｜　全'+dated.length+'件から検索できます');
+  }
 }
 var gc=document.getElementById('give');
 give.forEach(function(e){var lvtxt=e.l===3?'◎◎':e.l===2?'◎':'○';var nm=splitName(e);var card=document.createElement('div');card.className='card l'+e.l;card.innerHTML='<div class="main"><div><span class="gb" style="background:#0369a1;color:#fff">🤲 与える</span><span class="lv lv'+e.l+'">'+lvtxt+'</span></div><div class="title">'+nm[0]+'</div>'+(nm[1]?'<div class="detail">'+nm[1]+'</div>':'')+'<div class="meta2">💴'+e.f+'</div></div><div class="btns"><a class="apply" href="'+e.u+'" target="_blank">始める</a></div>';gc.appendChild(card);});
+/* ===== 検索ボックスの配線（2026/8/6 追加） ===== */
+(function(){
+  var qi=document.getElementById('q');
+  if(qi){
+    var tid=null;
+    qi.addEventListener('input',function(){
+      clearTimeout(tid);var v=this.value;
+      tid=setTimeout(function(){qText=norm(v).trim();render();},150);
+    });
+    /* ページ内どこでも「/」で検索窓へ */
+    document.addEventListener('keydown',function(ev){
+      if(ev.key==='/'&&document.activeElement!==qi){ev.preventDefault();qi.focus();qi.select();}
+      if(ev.key==='Escape'&&document.activeElement===qi){qi.value='';qText='';render();qi.blur();}
+    });
+  }
+  var cb=document.getElementById('clrAll');
+  if(cb)cb.onclick=clearAll;
+  /* スクロールでヘッダーを縮める（検索欄・絞り込みは常に触れる） */
+  var hd=document.querySelector('header');
+  if(hd){
+    var onScroll=function(){hd.classList.toggle('mini',window.scrollY>70);};
+    window.addEventListener('scroll',onScroll,{passive:true});
+    onScroll();
+  }
+})();
 render();
 </script>
 </body>
